@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --background: #08090d;
+  --foreground: #ffffff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), "Microsoft YaHei", "PingFang SC",
+    "Hiragino Sans GB", Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: #e21b2d;
+  color: #ffffff;
+}
+
+.capture-safe {
+  background-color: #08090d;
+  color: #ffffff;
+}
+
+.capture-safe svg,
+.capture-safe .recharts-wrapper {
+  background-color: transparent;
+}

@@ -4,12 +4,24 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import html2canvas from "html2canvas";
-import { ArrowLeft, Gauge, ShieldCheck, TrendingUp } from "lucide-react";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { ActionButtons } from "@/components/ActionButtons";
 import { RadarChartBlock } from "@/components/RadarChartBlock";
 import { ResultCard } from "@/components/ResultCard";
 import { ScoreBars } from "@/components/ScoreBars";
 import { ShareCard } from "@/components/ShareCard";
+import {
+  BACKGROUND_STORAGE_KEY,
+  parseStoredBackground,
+} from "@/lib/background";
+import {
+  buildFortyEightHourAction,
+  buildMinimumComboAdvice,
+  buildNextPlaybook,
+  buildPositionSentence,
+  buildRadarInterpretation,
+  buildSixDimensionCards,
+} from "@/lib/report-content";
 import {
   ANSWERS_STORAGE_KEY,
   calculateResult,
@@ -17,7 +29,20 @@ import {
   type AssessmentResult,
 } from "@/lib/score";
 
-function buildCopyText(result: AssessmentResult) {
+function buildCopyText(
+  result: AssessmentResult,
+  background: ReturnType<typeof parseStoredBackground>,
+) {
+  const action = buildFortyEightHourAction({
+    totalScore: result.totalScore,
+    scores: result.dimensionScores,
+    background,
+    resultTypeTitle: result.resultType.title,
+  });
+  const playbook = buildNextPlaybook(result.dimensionScores);
+  const positionSentence = buildPositionSentence(background);
+  const minimumCombo = buildMinimumComboAdvice(background, action.lowestDimension);
+
   return [
     "我的AI一人公司不可替代性测评结果：",
     "",
@@ -26,11 +51,25 @@ function buildCopyText(result: AssessmentResult) {
     `组合成熟度：${result.maturityScore} / 10`,
     `最强壁垒：${result.highestDimensions.map((item) => item.name).join("、")}`,
     `最需要补强：${result.lowestDimension.name}`,
-    `48小时行动：${result.resultType.action48h.join(" ")}`,
     "",
-    "我的不可替代性表达句：",
-    "我不是最懂____的人，但我可能是最懂____场景里，如何帮____做到____的人。",
-  ].join("\n");
+    "下一步打法：",
+    `${playbook.high.title}：${playbook.high.text}`,
+    `${playbook.middle.title}：${playbook.middle.text}`,
+    `${playbook.low.title}：${playbook.low.text}`,
+    "",
+    `48小时行动：${action.title}`,
+    action.notice,
+    ...action.steps.map((item, index) => `${index + 1}. ${item}`),
+    action.requirement ? `要求：${action.requirement}` : "",
+    "",
+    "不可替代性表达句：",
+    positionSentence.text,
+    "",
+    "最小组合建议：",
+    `一个小场景：${minimumCombo.scene}`,
+    `一个新能力：${minimumCombo.ability}`,
+    `一个公开作品：${minimumCombo.work}`,
+  ].filter(Boolean).join("\n");
 }
 
 export default function ResultPage() {
@@ -40,6 +79,10 @@ export default function ResultPage() {
     if (typeof window === "undefined") return null;
     return parseStoredAnswers(localStorage.getItem(ANSWERS_STORAGE_KEY));
   });
+  const [background] = useState(() => {
+    if (typeof window === "undefined") return {};
+    return parseStoredBackground(localStorage.getItem(BACKGROUND_STORAGE_KEY));
+  });
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -47,6 +90,25 @@ export default function ResultPage() {
     if (!answers) return null;
     return calculateResult(answers);
   }, [answers]);
+
+  const report = useMemo(() => {
+    if (!result) return null;
+    const action48h = buildFortyEightHourAction({
+      totalScore: result.totalScore,
+      scores: result.dimensionScores,
+      background,
+      resultTypeTitle: result.resultType.title,
+    });
+
+    return {
+      radarInterpretation: buildRadarInterpretation(result.dimensionScores),
+      nextPlaybook: buildNextPlaybook(result.dimensionScores),
+      dimensionCards: buildSixDimensionCards(result.dimensionScores),
+      action48h,
+      positionSentence: buildPositionSentence(background),
+      minimumCombo: buildMinimumComboAdvice(background, action48h.lowestDimension),
+    };
+  }, [result, background]);
 
   async function saveImage() {
     if (!captureRef.current) return;
@@ -77,7 +139,7 @@ export default function ResultPage() {
 
   async function copyResult() {
     if (!result) return;
-    await navigator.clipboard.writeText(buildCopyText(result));
+    await navigator.clipboard.writeText(buildCopyText(result, background));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
@@ -106,6 +168,8 @@ export default function ResultPage() {
       </main>
     );
   }
+
+  if (!report) return null;
 
   return (
     <main className="min-h-screen bg-[#08090D] px-4 py-6 text-[#FFFFFF] sm:px-6 lg:px-8">
@@ -159,67 +223,137 @@ export default function ResultPage() {
             </ResultCard>
           </div>
 
-          <div className="grid gap-5 md:grid-cols-2">
-            <ResultCard title="你的优势壁垒" eyebrow="strength">
-              <div className="flex items-start gap-3">
-                <TrendingUp className="mt-1 shrink-0 text-[#E21B2D]" size={20} />
-                <p>
-                  你当前最强的壁垒是：
-                  <strong className="text-[#FFFFFF]">
-                    {result.highestDimensions.map((item) => item.name).join("、")}
-                  </strong>
-                  。这说明你已经在这些方面具备一定优势，后续要把它们放进你的市场表达和产品设计里。
-                </p>
-              </div>
-            </ResultCard>
-
-            <ResultCard title="你的短板壁垒" eyebrow="focus">
-              <div className="flex items-start gap-3">
-                <Gauge className="mt-1 shrink-0 text-[#E21B2D]" size={20} />
-                <p>
-                  你当前最需要补强的是：
-                  <strong className="text-[#FFFFFF]">{result.lowestDimension.name}</strong>
-                  。这不是弱点，而是你下一步最值得投入的成长点。
-                </p>
-              </div>
-            </ResultCard>
-          </div>
-
-          <ResultCard title="类型解读" eyebrow="diagnosis">
-            <div className="space-y-4">
-              {result.resultType.description.map((paragraph) => (
+          <ResultCard title="这张雷达图真正说明什么" eyebrow="radar reading">
+            <div className="space-y-3">
+              {report.radarInterpretation.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
               ))}
+            </div>
+          </ResultCard>
+
+          <ResultCard title="你的下一步打法" eyebrow="next move">
+            <p className="mb-4 text-[#B8B8C2]">
+              别平均用力。先用最容易被看见的入口启动，再把最容易卡住的地方补上。
+            </p>
+            <div className="grid gap-4 lg:grid-cols-3">
+              {[
+                report.nextPlaybook.high,
+                report.nextPlaybook.middle,
+                report.nextPlaybook.low,
+              ].map((item) => (
+                <section
+                  key={item.title}
+                  className="min-w-0 rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(0,0,0,0.20)] p-4"
+                >
+                  <h3 className="text-base font-semibold text-[#FFFFFF]">
+                    {item.title}
+                  </h3>
+                  {item.dimensions.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.dimensions.map((dimension) => (
+                        <span
+                          key={dimension.key}
+                          className="rounded-md bg-[rgba(226,27,45,0.12)] px-2 py-1 text-xs font-semibold text-[#F1C4C9]"
+                        >
+                          {dimension.shortName} {dimension.percentage}%
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="mt-3 break-words">{item.text}</p>
+                </section>
+              ))}
+            </div>
+          </ResultCard>
+
+          <ResultCard title="六维短卡片解读" eyebrow="dimension cards">
+            <div className="grid gap-4 lg:grid-cols-2">
+              {report.dimensionCards.map((item) => (
+                <article
+                  key={item.key}
+                  className="min-w-0 rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(0,0,0,0.20)] p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-base font-semibold text-[#FFFFFF]">
+                      {item.name}
+                    </h3>
+                    <span className="rounded-md border border-[rgba(226,27,45,0.32)] bg-[rgba(226,27,45,0.10)] px-2.5 py-1 text-xs font-semibold text-[#F1C4C9]">
+                      {item.percentage}% · {item.status}
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <p className="break-words text-[#FFFFFF]">{item.judgment}</p>
+                    <p className="break-words">
+                      <span className="font-semibold text-[#FFFFFF]">动作：</span>
+                      {item.action}
+                    </p>
+                    <p className="break-words text-[#B8B8C2]">
+                      <span className="font-semibold text-[#D6D6DD]">示例：</span>
+                      {item.example}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </ResultCard>
+
+          <ResultCard title="类型解读" eyebrow="diagnosis">
+            <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-md bg-[rgba(0,0,0,0.20)] p-4">
-                <p className="font-semibold text-[#FFFFFF]">核心建议</p>
+                <p className="font-semibold text-[#FFFFFF]">你现在真正的问题</p>
+                <p className="mt-2">{result.resultType.description[0]}</p>
+              </div>
+              <div className="rounded-md bg-[rgba(0,0,0,0.20)] p-4">
+                <p className="font-semibold text-[#FFFFFF]">为什么会这样</p>
+                <p className="mt-2">
+                  {result.resultType.description[1] ?? result.resultType.description[0]}
+                </p>
+              </div>
+              <div className="rounded-md bg-[rgba(0,0,0,0.20)] p-4">
+                <p className="font-semibold text-[#FFFFFF]">下一步该干什么</p>
                 <p className="mt-2">{result.resultType.coreAdvice}</p>
               </div>
-              <div className="rounded-md bg-[rgba(0,0,0,0.20)] p-4">
-                <p className="font-semibold text-[#FFFFFF]">48小时行动</p>
-                <div className="mt-2 space-y-2">
-                  {result.resultType.action48h.map((item) => (
-                    <p key={item}>{item}</p>
-                  ))}
-                </div>
-              </div>
-              <p>
-                <span className="font-semibold text-[#FFFFFF]">适合下一步：</span>
-                {result.resultType.nextStep}
+            </div>
+          </ResultCard>
+
+          <ResultCard title="48小时具体行动" eyebrow="action">
+            <div className="space-y-4">
+              <p className="rounded-md border border-[rgba(226,27,45,0.30)] bg-[rgba(226,27,45,0.10)] p-4 font-semibold text-[#FFFFFF]">
+                {report.action48h.notice}
               </p>
+              <h3 className="text-xl font-semibold text-[#FFFFFF]">
+                {report.action48h.title}
+              </h3>
+              <ol className="space-y-2 pl-5">
+                {report.action48h.steps.map((item) => (
+                  <li key={item} className="list-decimal break-words">
+                    {item}
+                  </li>
+                ))}
+              </ol>
+              {report.action48h.requirement ? (
+                <p className="rounded-md bg-[rgba(0,0,0,0.20)] p-4 text-[#FFFFFF]">
+                  要求：{report.action48h.requirement}
+                </p>
+              ) : null}
             </div>
           </ResultCard>
 
           <div className="grid gap-5 md:grid-cols-2">
             <ResultCard title="你的不可替代性表达句" eyebrow="position sentence">
               <p className="rounded-md border border-[rgba(255,255,255,0.10)] bg-[rgba(0,0,0,0.20)] p-4 text-[#FFFFFF]">
-                我不是最懂【领域】的人，
-                <br />
-                但我可能是最懂【具体场景】里，
-                <br />
-                如何帮【具体人群】做到【具体结果】的人。
+                {report.positionSentence.lines.map((line) => (
+                  <span key={line}>
+                    {line}
+                    <br />
+                  </span>
+                ))}
               </p>
               <p className="mt-4">
-                这句话不是最终定位，而是帮你开始表达自己的市场位置。
+                这不是最终定位，而是帮你先把市场位置说清楚。
+              </p>
+              <p className="mt-3 text-sm text-[#B8B8C2]">
+                {report.positionSentence.note}
               </p>
             </ResultCard>
 
@@ -227,30 +361,27 @@ export default function ResultPage() {
               <div className="space-y-3">
                 <p>
                   <span className="font-semibold text-[#FFFFFF]">一个小场景：</span>
-                  {result.resultType.minimumCombo.scene}
+                  {report.minimumCombo.scene}
                 </p>
                 <p>
                   <span className="font-semibold text-[#FFFFFF]">一个新能力：</span>
-                  {result.resultType.minimumCombo.ability}
+                  {report.minimumCombo.ability}
                 </p>
                 <p>
                   <span className="font-semibold text-[#FFFFFF]">一个公开作品：</span>
-                  {result.resultType.minimumCombo.work}
+                  {report.minimumCombo.work}
                 </p>
               </div>
             </ResultCard>
           </div>
 
-          <ResultCard title="48小时内，先做一个能被看见的动作" eyebrow="action">
-            <div className="space-y-2">
-              {result.resultType.action48h.map((item) => (
-                <p key={item}>{item}</p>
-              ))}
-            </div>
-          </ResultCard>
-
           <ResultCard title="分享卡" eyebrow="share">
-            <ShareCard result={result} />
+            <ShareCard
+              result={result}
+              action48h={report.action48h}
+              minimumCombo={report.minimumCombo}
+              positionSentence={report.positionSentence}
+            />
           </ResultCard>
 
           <div className="flex items-center gap-2 rounded-lg border border-[rgba(255,255,255,0.10)] bg-[rgba(23,24,32,0.80)] p-4 text-sm text-[#B8B8C2]">

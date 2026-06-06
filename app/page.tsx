@@ -1,9 +1,34 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowRight, Radar, ShieldCheck } from "lucide-react";
+import {
+  BACKGROUND_STORAGE_KEY,
+  parseStoredBackground,
+  sanitizeBackground,
+} from "@/lib/background";
+import type { UserBackground } from "@/lib/report-content";
 
 const dimensions = ["经历壁垒", "场景壁垒", "方法壁垒", "作品壁垒", "关系壁垒", "风格壁垒"];
 
 export default function Home() {
+  const [background, setBackground] = useState<UserBackground>(() => {
+    if (typeof window === "undefined") return {};
+    return parseStoredBackground(localStorage.getItem(BACKGROUND_STORAGE_KEY));
+  });
+
+  function updateBackground(key: keyof UserBackground, value: string) {
+    setBackground((current) => ({ ...current, [key]: value }));
+  }
+
+  function saveBackground() {
+    localStorage.setItem(
+      BACKGROUND_STORAGE_KEY,
+      JSON.stringify(sanitizeBackground(background)),
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#08090D] px-4 py-6 text-white sm:px-6 lg:px-10">
       <section className="mx-auto grid min-h-[calc(100vh-48px)] w-full max-w-6xl items-center gap-8 lg:grid-cols-[1.03fr_0.97fr]">
@@ -38,8 +63,54 @@ export default function Home() {
             ))}
           </div>
 
+          <div className="mt-7 rounded-lg border border-white/10 bg-[#171820]/72 p-4 sm:p-5">
+            <p className="text-sm font-semibold text-white">先补一点背景信息</p>
+            <p className="mt-2 text-sm leading-6 text-[#B8B8C2]">
+              可选填写。填得越具体，结果页底部的行动建议越像你的真实情况。
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-sm text-[#D6D6DD]">
+                想做的方向/领域
+                <input
+                  value={background.domain ?? ""}
+                  onChange={(event) => updateBackground("domain", event.target.value)}
+                  placeholder="例如：AI课程"
+                  className="min-h-11 rounded-md border border-white/10 bg-[#08090D] px-3 text-white outline-none transition placeholder:text-[#686B76] focus:border-[#E21B2D]"
+                />
+              </label>
+              <label className="grid gap-1.5 text-sm text-[#D6D6DD]">
+                最想服务的人群
+                <input
+                  value={background.audience ?? ""}
+                  onChange={(event) => updateBackground("audience", event.target.value)}
+                  placeholder="例如：线下培训老师"
+                  className="min-h-11 rounded-md border border-white/10 bg-[#08090D] px-3 text-white outline-none transition placeholder:text-[#686B76] focus:border-[#E21B2D]"
+                />
+              </label>
+              <label className="grid gap-1.5 text-sm text-[#D6D6DD]">
+                这个人群常遇到的问题
+                <input
+                  value={background.problem ?? ""}
+                  onChange={(event) => updateBackground("problem", event.target.value)}
+                  placeholder="例如：不知道怎么把课程产品化"
+                  className="min-h-11 rounded-md border border-white/10 bg-[#08090D] px-3 text-white outline-none transition placeholder:text-[#686B76] focus:border-[#E21B2D]"
+                />
+              </label>
+              <label className="grid gap-1.5 text-sm text-[#D6D6DD]">
+                最能拿出来的能力/经验
+                <input
+                  value={background.strength ?? ""}
+                  onChange={(event) => updateBackground("strength", event.target.value)}
+                  placeholder="例如：讲课经验和AI工具"
+                  className="min-h-11 rounded-md border border-white/10 bg-[#08090D] px-3 text-white outline-none transition placeholder:text-[#686B76] focus:border-[#E21B2D]"
+                />
+              </label>
+            </div>
+          </div>
+
           <Link
             href="/quiz"
+            onClick={saveBackground}
             className="mt-9 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-md bg-[#E21B2D] px-6 py-4 text-base font-semibold text-white shadow-[0_0_30px_rgba(226,27,45,0.28)] transition hover:bg-[#f03040] sm:w-auto"
           >
             开始测评
